@@ -174,8 +174,9 @@ def plot_confusion_matrix(cm, class_names):
 
 def evaluate_model_multi(model, test_data, class_names):
     """
-  Evaluate BINARY model on test data using different metrics
+  Evaluate MULTI model on test data using different metrics
   Also plots the confusion matrixes
+  Compatible with DirectoryIterator as test_data
   """
     y_pred = model.predict(test_data)
     y_pred = y_pred.argmax(axis=1)
@@ -189,6 +190,27 @@ def evaluate_model_multi(model, test_data, class_names):
     print(f"F1: {f1_score(test_data.labels, y_pred, average='weighted'):.1%}")
 
     cm = confusion_matrix(test_data.labels, y_pred)
+    plot_confusion_matrix(cm, class_names)
+
+
+def evaluate_model_multi_batchdataset(model, test_data, class_names):
+    """
+  Evaluate MULTI model on test data using different metrics
+  Also plots the confusion matrixes
+  Compatible with BatchDataset as test_data
+  """
+    y_pred = model.predict(test_data)
+    y_pred = y_pred.argmax(axis=1)
+    labels = np.concatenate([np.argmax(y.numpy(), axis=-1) for _, y in test_data])
+
+    print(f'Accuracy: {accuracy_score(labels, y_pred):.1%}')
+    print(
+        f"Precision: {precision_score(labels, y_pred, average='weighted'):.1%}"
+    )
+    print(f"Recall: {recall_score(labels, y_pred, average='weighted'):.1%}")
+    print(f"F1: {f1_score(labels, y_pred, average='weighted'):.1%}")
+
+    cm = confusion_matrix(labels, y_pred)
     plot_confusion_matrix(cm, class_names)
 
 
