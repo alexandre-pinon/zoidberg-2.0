@@ -11,10 +11,28 @@ import tensorflow as tf
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
 
 
+def walk_through_dir(dir_path):
+    """
+    Walks through dir_path returning its contents.
+    Args:
+      dir_path (str): target directory
+    
+    Returns:
+      A print out of:
+        number of subdiretories in dir_path
+        number of images (files) in each subdirectory
+        name of each subdirectory
+    """
+    for dirpath, dirnames, filenames in os.walk(dir_path):
+        print(
+            f"There are {len(dirnames)} directories and {len(filenames)} images in '{dirpath}'."
+        )
+
+
 def view_random_images(target_dir, class_names):
     """
-  Read and show 10 random images from the dataset
-  """
+    Read and show 10 random images from the dataset
+    """
     n_images = 10
     fig, ax = plt.subplots(2, 5, figsize=(24, 8))
 
@@ -36,10 +54,72 @@ def view_random_images(target_dir, class_names):
         ax[index].set_xlabel(f"{img.shape}")
 
 
+def preprocess_images(ds,
+                      seed,
+                      shuffle=False,
+                      augment=False,
+                      img_size=(224, 224),
+                      batch_size=32,
+                      shuffle_buffer_size=1000):
+    """
+    Preprocess a tf.data.Dataset of images using rescaling and various data augmentation techinques
+    """
+
+    def resize_and_rescale(image, label):
+        image = tf.cast(image, tf.float32)
+        image = tf.image.resize(image, [*img_size])
+        image = (image / 255.0)
+        return image, label
+
+    def augment(image_label, seed):
+        image, label = image_label
+        image, label = resize_and_rescale(image, label)
+        image = tf.image.resize_with_crop_or_pad(image, img_size[0] + 6,
+                                                 img_size[1] + 6)
+        # Make a new seed.
+        new_seed = tf.random.experimental.stateless_split(seed, num=1)[0, :]
+        # Random crop back to the original size.
+        image = tf.image.stateless_random_crop(image,
+                                               size=[*img_size, 3],
+                                               seed=seed)
+        # Random brightness.
+        image = tf.image.stateless_random_brightness(image,
+                                                     max_delta=0.5,
+                                                     seed=new_seed)
+        image = tf.clip_by_value(image, 0, 1)
+        return image, label
+
+    ds = ds.unbatch()
+
+    if shuffle:
+        ds = ds.shuffle(shuffle_buffer_size, seed)
+
+    # Use data augmentation only on the training set.
+    if augment:
+        # Create a generator.
+        rng = tf.random.Generator.from_seed(seed, alg='philox')
+
+        # Create a wrapper function for updating seeds.
+        def f(x, y):
+            seed = rng.make_seeds(2)[0]
+            image, label = augment((x, y), seed)
+            return image, label
+
+        ds = ds.map(f, num_parallel_calls=tf.data.AUTOTUNE)
+    else:
+        ds = ds.map(resize_and_rescale, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Batch all datasets.
+    ds = ds.batch(batch_size)
+
+    # Use buffered prefetching on all datasets.
+    return ds.prefetch(buffer_size=tf.data.AUTOTUNE)
+
+
 def plot_loss_curves(history):
     """
-  Returns separate loss curves for training and validation metrics.
-  """
+    Returns separate loss curves for training and validation metrics.
+    """
     loss = history.history['loss']
     val_loss = history.history['val_loss']
 
@@ -65,16 +145,83 @@ def plot_loss_curves(history):
     ax[1].legend()
 
 
-def evaluate_model_binary(model, test_data):
+def evaluate_model_binary(model, test_data, class_names):
     """
-  Evaluate BINARY model on test data using different metrics
-  """
+    Evaluate BINARY model on test data using different metrics
+    Compatible with DirectoryIterator as test_data
+    """
     y_pred = model.predict(test_data)
     y_pred = np.round(y_pred.flatten())
+
     print(f'Accuracy: {accuracy_score(test_data.labels, y_pred):.1%}')
     print(f"Precision: {precision_score(test_data.labels, y_pred):.1%}")
     print(f"Recall: {recall_score(test_data.labels, y_pred):.1%}")
     print(f"F1: {f1_score(test_data.labels, y_pred):.1%}")
+
+    cm = confusion_matrix(test_data.labels, y_pred)
+    plot_confusion_matrixes(cm.T, class_names)
+
+
+def evaluate_model_binary_batchdataset(model, test_data, class_names):
+    """
+    Evaluate BINARY model on test data using different metrics
+    Compatible with BatchDataset as test_data
+    """
+    y_pred = model.predict(test_data)
+    y_pred = np.round(y_pred.flatten())
+    labels = np.concatenate(
+        [np.ravel(y.numpy()) for _, y in test_data])
+
+    print(f'Accuracy: {accuracy_score(labels, y_pred):.1%}')
+    print(f"Precision: {precision_score(labels, y_pred):.1%}")
+    print(f"Recall: {recall_score(labels, y_pred):.1%}")
+    print(f"F1: {f1_score(labels, y_pred):.1%}")
+
+    cm = confusion_matrix(labels, y_pred)
+    plot_confusion_matrixes(cm.T, class_names)
+
+
+def evaluate_model_multi(model, test_data, class_names):
+    """
+    Evaluate MULTI model on test data using different metrics
+    Also plots the confusion matrixes
+    Compatible with DirectoryIterator as test_data
+    """
+    y_pred = model.predict(test_data)
+    y_pred = y_pred.argmax(axis=1)
+    print(f'Accuracy: {accuracy_score(test_data.labels, y_pred):.1%}')
+    print(
+        f"Precision: {precision_score(test_data.labels, y_pred, average='weighted'):.1%}"
+    )
+    print(
+        f"Recall: {recall_score(test_data.labels, y_pred, average='weighted'):.1%}"
+    )
+    print(f"F1: {f1_score(test_data.labels, y_pred, average='weighted'):.1%}")
+
+    cm = confusion_matrix(test_data.labels, y_pred)
+    plot_confusion_matrixes(cm.T, class_names)
+
+
+def evaluate_model_multi_batchdataset(model, test_data, class_names):
+    """
+    Evaluate MULTI model on test data using different metrics
+    Also plots the confusion matrixes
+    Compatible with BatchDataset as test_data
+    """
+    y_pred = model.predict(test_data)
+    y_pred = y_pred.argmax(axis=1)
+    labels = np.concatenate(
+        [np.argmax(y.numpy(), axis=-1) for _, y in test_data])
+
+    print(f'Accuracy: {accuracy_score(labels, y_pred):.1%}')
+    print(
+        f"Precision: {precision_score(labels, y_pred, average='weighted'):.1%}"
+    )
+    print(f"Recall: {recall_score(labels, y_pred, average='weighted'):.1%}")
+    print(f"F1: {f1_score(labels, y_pred, average='weighted'):.1%}")
+
+    cm = confusion_matrix(labels, y_pred)
+    plot_confusion_matrixes(cm.T, class_names)
 
 
 def make_val_predictions(model,
@@ -83,9 +230,9 @@ def make_val_predictions(model,
                          img_size=(224, 224),
                          batch_size=32):
     """
-  Make predictions on BINARY plot_data (obtained using flow_from_directory()) and
-  graphically compare them with true labels
-  """
+    Make predictions on BINARY plot_data (obtained using flow_from_directory()) and
+    graphically compare them with true labels
+    """
     from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
     # Import the target images and preprocess them
@@ -135,12 +282,12 @@ def make_val_predictions(model,
         ax.set_yticks([])
 
 
-def plot_confusion_matrix(cm, class_names):
+def plot_confusion_matrixes(cm, class_names):
     """
-  Plot confusion matrixes:
-  - The first one with absolute values
-  - The second one with percentages
-  """
+    Plot confusion matrixes:
+    - The first one with absolute values
+    - The second one with percentages
+    """
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
 
     sns.heatmap(data=cm,
@@ -150,74 +297,32 @@ def plot_confusion_matrix(cm, class_names):
                 fmt='.0f',
                 annot_kws={'size': 16})
     ax[0].set_title('Confusion Matrix', fontsize=22)
-    ax[0].set_xlabel('Predicted Label', fontsize=16)
-    ax[0].set_ylabel('True Label', fontsize=16)
+    ax[0].set_xlabel('True Label', fontsize=16)
+    ax[0].set_ylabel('Predicted Label', fontsize=16)
     ax[0].set_xticks(ticks=np.arange(.5, len(class_names) + .5))
     ax[0].set_xticklabels(labels=class_names, fontsize=12)
     ax[0].set_yticks(ticks=np.arange(.5, len(class_names) + .5))
     ax[0].set_yticklabels(labels=class_names, fontsize=12)
 
-    sns.heatmap(data=cm / np.sum(cm, axis=1, keepdims=True),
+    sns.heatmap(data=cm / np.sum(cm, axis=0, keepdims=True),
                 ax=ax[1],
                 cmap='RdYlGn',
                 annot=True,
                 fmt='.1%',
                 annot_kws={'size': 16})
     ax[1].set_title('Confusion Matrix', fontsize=22)
-    ax[1].set_xlabel('Predicted Label', fontsize=16)
-    ax[1].set_ylabel('True Label', fontsize=16)
+    ax[1].set_xlabel('True Label', fontsize=16)
+    ax[1].set_ylabel('Predicted Label', fontsize=16)
     ax[1].set_xticks(ticks=np.arange(.5, len(class_names) + .5))
     ax[1].set_xticklabels(labels=class_names, fontsize=12)
     ax[1].set_yticks(ticks=np.arange(.5, len(class_names) + .5))
     ax[1].set_yticklabels(labels=class_names, fontsize=12)
 
 
-def evaluate_model_multi(model, test_data, class_names):
-    """
-  Evaluate MULTI model on test data using different metrics
-  Also plots the confusion matrixes
-  Compatible with DirectoryIterator as test_data
-  """
-    y_pred = model.predict(test_data)
-    y_pred = y_pred.argmax(axis=1)
-    print(f'Accuracy: {accuracy_score(test_data.labels, y_pred):.1%}')
-    print(
-        f"Precision: {precision_score(test_data.labels, y_pred, average='weighted'):.1%}"
-    )
-    print(
-        f"Recall: {recall_score(test_data.labels, y_pred, average='weighted'):.1%}"
-    )
-    print(f"F1: {f1_score(test_data.labels, y_pred, average='weighted'):.1%}")
-
-    cm = confusion_matrix(test_data.labels, y_pred)
-    plot_confusion_matrix(cm, class_names)
-
-
-def evaluate_model_multi_batchdataset(model, test_data, class_names):
-    """
-  Evaluate MULTI model on test data using different metrics
-  Also plots the confusion matrixes
-  Compatible with BatchDataset as test_data
-  """
-    y_pred = model.predict(test_data)
-    y_pred = y_pred.argmax(axis=1)
-    labels = np.concatenate([np.argmax(y.numpy(), axis=-1) for _, y in test_data])
-
-    print(f'Accuracy: {accuracy_score(labels, y_pred):.1%}')
-    print(
-        f"Precision: {precision_score(labels, y_pred, average='weighted'):.1%}"
-    )
-    print(f"Recall: {recall_score(labels, y_pred, average='weighted'):.1%}")
-    print(f"F1: {f1_score(labels, y_pred, average='weighted'):.1%}")
-
-    cm = confusion_matrix(labels, y_pred)
-    plot_confusion_matrix(cm, class_names)
-
-
 def create_tensorboard_callback(dir_name, experiment_name):
     """
-  Creates a tensorboard callback given a directory and an experiment name
-  """
+    Creates a tensorboard callback given a directory and an experiment name
+    """
     import datetime
     log_dir = dir_name + "/" + experiment_name + "/" + datetime.datetime.now(
     ).strftime("%Y%m%d-%H%M%S")
@@ -229,15 +334,15 @@ def create_tensorboard_callback(dir_name, experiment_name):
 def create_tfhub_model(model_url, num_classes=10, img_size=(224, 224)):
     """Takes a TensorFlow Hub URL and creates a Keras Sequential model with it.
   
-  Args:
-    model_url (str): A TensorFlow Hub feature extraction URL.
-    num_classes (int): Number of output neurons in output layer,
-      should be equal to number of target classes, default 10.
+    Args:
+      model_url (str): A TensorFlow Hub feature extraction URL.
+      num_classes (int): Number of output neurons in output layer,
+        should be equal to number of target classes, default 10.
 
-  Returns:
-    An uncompiled Keras Sequential model with model_url as feature
-    extractor layer and Dense output layer with num_classes outputs.
-  """
+    Returns:
+      An uncompiled Keras Sequential model with model_url as feature
+      extractor layer and Dense output layer with num_classes outputs.
+    """
     import tensorflow_hub as hub
     from tensorflow.keras import layers
 
@@ -256,21 +361,3 @@ def create_tfhub_model(model_url, num_classes=10, img_size=(224, 224)):
     ])
 
     return model
-
-
-def walk_through_dir(dir_path):
-    """
-  Walks through dir_path returning its contents.
-  Args:
-    dir_path (str): target directory
-  
-  Returns:
-    A print out of:
-      number of subdiretories in dir_path
-      number of images (files) in each subdirectory
-      name of each subdirectory
-  """
-    for dirpath, dirnames, filenames in os.walk(dir_path):
-        print(
-            f"There are {len(dirnames)} directories and {len(filenames)} images in '{dirpath}'."
-        )
