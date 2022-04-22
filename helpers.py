@@ -145,7 +145,16 @@ def plot_loss_curves(history):
     ax[1].legend()
 
 
-def evaluate_model_binary(model, test_data, class_names):
+def calculate_metrics(y_true, y_pred):
+    return {
+        "accuracy": accuracy_score(y_true, y_pred),
+        "precision": precision_score(y_true, y_pred),
+        "recall": recall_score(y_true, y_pred),
+        "f1": f1_score(y_true, y_pred)
+    }
+
+
+def evaluate_model_binary(model, test_data):
     """
     Evaluate BINARY model on test data using different metrics
     Compatible with DirectoryIterator as test_data
@@ -153,35 +162,30 @@ def evaluate_model_binary(model, test_data, class_names):
     y_pred = model.predict(test_data)
     y_pred = np.round(y_pred.flatten())
 
-    print(f'Accuracy: {accuracy_score(test_data.labels, y_pred):.1%}')
-    print(f"Precision: {precision_score(test_data.labels, y_pred):.1%}")
-    print(f"Recall: {recall_score(test_data.labels, y_pred):.1%}")
-    print(f"F1: {f1_score(test_data.labels, y_pred):.1%}")
+    y_true = test_data.labels
 
-    cm = confusion_matrix(test_data.labels, y_pred)
-    plot_confusion_matrixes(cm.T, class_names)
+    metrics = calculate_metrics(y_true, y_pred)
+
+    return y_true, y_pred, metrics
 
 
-def evaluate_model_binary_batchdataset(model, test_data, class_names):
+def evaluate_model_binary_batchdataset(model, test_data):
     """
     Evaluate BINARY model on test data using different metrics
     Compatible with BatchDataset as test_data
     """
     y_pred = model.predict(test_data)
     y_pred = np.round(y_pred.flatten())
-    labels = np.concatenate(
-        [np.ravel(y.numpy()) for _, y in test_data])
+    labels = np.concatenate([np.ravel(y.numpy()) for _, y in test_data])
 
-    print(f'Accuracy: {accuracy_score(labels, y_pred):.1%}')
-    print(f"Precision: {precision_score(labels, y_pred):.1%}")
-    print(f"Recall: {recall_score(labels, y_pred):.1%}")
-    print(f"F1: {f1_score(labels, y_pred):.1%}")
+    y_true = labels
 
-    cm = confusion_matrix(labels, y_pred)
-    plot_confusion_matrixes(cm.T, class_names)
+    metrics = calculate_metrics(y_true, y_pred)
+
+    return y_true, y_pred, metrics
 
 
-def evaluate_model_multi(model, test_data, class_names):
+def evaluate_model_multi(model, test_data):
     """
     Evaluate MULTI model on test data using different metrics
     Also plots the confusion matrixes
@@ -189,20 +193,15 @@ def evaluate_model_multi(model, test_data, class_names):
     """
     y_pred = model.predict(test_data)
     y_pred = y_pred.argmax(axis=1)
-    print(f'Accuracy: {accuracy_score(test_data.labels, y_pred):.1%}')
-    print(
-        f"Precision: {precision_score(test_data.labels, y_pred, average='weighted'):.1%}"
-    )
-    print(
-        f"Recall: {recall_score(test_data.labels, y_pred, average='weighted'):.1%}"
-    )
-    print(f"F1: {f1_score(test_data.labels, y_pred, average='weighted'):.1%}")
 
-    cm = confusion_matrix(test_data.labels, y_pred)
-    plot_confusion_matrixes(cm.T, class_names)
+    y_true = test_data.labels
+
+    metrics = calculate_metrics(y_true, y_pred)
+
+    return y_true, y_pred, metrics
 
 
-def evaluate_model_multi_batchdataset(model, test_data, class_names):
+def evaluate_model_multi_batchdataset(model, test_data):
     """
     Evaluate MULTI model on test data using different metrics
     Also plots the confusion matrixes
@@ -213,15 +212,11 @@ def evaluate_model_multi_batchdataset(model, test_data, class_names):
     labels = np.concatenate(
         [np.argmax(y.numpy(), axis=-1) for _, y in test_data])
 
-    print(f'Accuracy: {accuracy_score(labels, y_pred):.1%}')
-    print(
-        f"Precision: {precision_score(labels, y_pred, average='weighted'):.1%}"
-    )
-    print(f"Recall: {recall_score(labels, y_pred, average='weighted'):.1%}")
-    print(f"F1: {f1_score(labels, y_pred, average='weighted'):.1%}")
+    y_true = labels
 
-    cm = confusion_matrix(labels, y_pred)
-    plot_confusion_matrixes(cm.T, class_names)
+    metrics = calculate_metrics(y_true, y_pred)
+
+    return y_true, y_pred, metrics
 
 
 def make_val_predictions(model,
