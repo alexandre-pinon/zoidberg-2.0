@@ -145,12 +145,13 @@ def plot_loss_curves(history):
     ax[1].legend()
 
 
-def calculate_metrics(y_true, y_pred):
+def calculate_metrics(y_true, y_pred, multi=False):
+    average = 'weighted' if multi else 'binary'
     return {
         "accuracy": accuracy_score(y_true, y_pred),
-        "precision": precision_score(y_true, y_pred),
-        "recall": recall_score(y_true, y_pred),
-        "f1": f1_score(y_true, y_pred)
+        "precision": precision_score(y_true, y_pred, average=average),
+        "recall": recall_score(y_true, y_pred, average=average),
+        "f1": f1_score(y_true, y_pred, average=average)
     }
 
 
@@ -196,7 +197,7 @@ def evaluate_model_multi(model, test_data):
 
     y_true = test_data.labels
 
-    metrics = calculate_metrics(y_true, y_pred)
+    metrics = calculate_metrics(y_true, y_pred, multi=True)
 
     return y_true, y_pred, metrics
 
@@ -214,7 +215,7 @@ def evaluate_model_multi_batchdataset(model, test_data):
 
     y_true = labels
 
-    metrics = calculate_metrics(y_true, y_pred)
+    metrics = calculate_metrics(y_true, y_pred, multi=True)
 
     return y_true, y_pred, metrics
 
