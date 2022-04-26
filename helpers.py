@@ -106,6 +106,17 @@ def preprocess_images(ds,
             return image, label
 
         ds = ds.map(f, num_parallel_calls=tf.data.AUTOTUNE)
+
+        data_augmentation = tf.keras.Sequential([
+            tf.keras.layers.RandomFlip("horizontal_and_vertical"),
+            tf.keras.layers.RandomRotation(0.2),
+            tf.keras.layers.RandomContrast(0.2),
+            tf.keras.layers.RandomTranslation(0.2, 0.2),
+            tf.keras.layers.RandomZoom(0.2, 0.2)
+        ])
+
+        ds = ds.map(lambda x, y: (data_augmentation(x, training=True), y),
+                    num_parallel_calls=tf.data.AUTOTUNE)
     else:
         ds = ds.map(resize_and_rescale, num_parallel_calls=tf.data.AUTOTUNE)
 
