@@ -76,18 +76,48 @@ def preprocess_images(ds,
         image, label = resize_and_rescale(image, label)
         image = tf.image.resize_with_crop_or_pad(image, img_size[0] + 6,
                                                  img_size[1] + 6)
-        # Make a new seed.
-        new_seed = tf.random.experimental.stateless_split(seed, num=1)[0, :]
-        # Random crop back to the original size.
+
+        # Stateless image augmentation
+        new_seeds = tf.random.experimental.stateless_split(seed, num=7)
         image = tf.image.stateless_random_crop(image,
                                                size=[*img_size, 3],
                                                seed=seed)
-        # Random brightness.
         image = tf.image.stateless_random_brightness(image,
-                                                     max_delta=0.5,
-                                                     seed=new_seed)
+                                                     max_delta=0.2,
+                                                     seed=new_seeds[0, :])
+        image = tf.image.stateless_random_contrast(image,
+                                                   lower=0.8,
+                                                   upper=1.2,
+                                                   seed=new_seeds[1, :])
+        image = tf.image.stateless_random_flip_left_right(image,
+                                                          seed=new_seeds[2, :])
+        image = tf.image.stateless_random_flip_up_down(image,
+                                                       seed=new_seeds[3, :])
+        image = tf.image.stateless_random_hue(image,
+                                              max_delta=0.2,
+                                              seed=new_seeds[4, :])
+        image = tf.image.stateless_random_saturation(image,
+                                                     lower=0.8,
+                                                     upper=1.2,
+                                                     seed=new_seeds[6, :])
+
         image = tf.clip_by_value(image, 0, 1)
         return image, label
+
+
+    # Create a wrapper function for updating seeds.
+    def augment_data(x, y):
+        seed = rng.make_seeds(2)[0]
+        image, label = augment((x, y), seed)
+        return image, label
+    
+    def keras_augment_data(x, y):
+        keras_augment = tf.keras.Sequential([
+            tf.keras.layers.RandomRotation(0.2),
+            tf.keras.layers.RandomTranslation(0.2, 0.2),
+            tf.keras.layers.RandomZoom(0.2, 0.2)
+        ])
+        return keras_augment(x, training=True), y
 
     ds = ds.unbatch()
 
@@ -98,25 +128,8 @@ def preprocess_images(ds,
     if augment:
         # Create a generator.
         rng = tf.random.Generator.from_seed(seed, alg='philox')
-
-        # Create a wrapper function for updating seeds.
-        def f(x, y):
-            seed = rng.make_seeds(2)[0]
-            image, label = augment((x, y), seed)
-            return image, label
-
-        ds = ds.map(f, num_parallel_calls=tf.data.AUTOTUNE)
-
-        data_augmentation = tf.keras.Sequential([
-            tf.keras.layers.RandomFlip("horizontal_and_vertical"),
-            tf.keras.layers.RandomRotation(0.2),
-            tf.keras.layers.RandomContrast(0.2),
-            tf.keras.layers.RandomTranslation(0.2, 0.2),
-            tf.keras.layers.RandomZoom(0.2, 0.2)
-        ])
-
-        ds = ds.map(lambda x, y: (data_augmentation(x, training=True), y),
-                    num_parallel_calls=tf.data.AUTOTUNE)
+        ds = ds.map(augment_data, num_parallel_calls=tf.data.AUTOTUNE)
+        ds = ds.map(keras_augment_data, num_parallel_calls=tf.data.AUTOTUNE)
     else:
         ds = ds.map(resize_and_rescale, num_parallel_calls=tf.data.AUTOTUNE)
 
