@@ -149,6 +149,10 @@ def plot_loss_curves(history):
 
     accuracy = history.history['accuracy']
     val_accuracy = history.history['val_accuracy']
+    precision = history.history['precision']
+    val_precision = history.history['val_precision']
+    recall = history.history['recall']
+    val_recall = history.history['val_recall']
 
     epochs = range(len(history.history['loss']))
 
@@ -164,7 +168,11 @@ def plot_loss_curves(history):
     # Plot accuracy
     ax[1].plot(epochs, accuracy, label='training_accuracy', c='g')
     ax[1].plot(epochs, val_accuracy, label='val_accuracy', c='lightgreen')
-    ax[1].set_title('Accuracy')
+    ax[1].plot(epochs, precision, label='training_precision', c='b')
+    ax[1].plot(epochs, val_precision, label='val_precision', c='lightblue')
+    ax[1].plot(epochs, recall, label='training_recall', c='darkcyan')
+    ax[1].plot(epochs, val_recall, label='val_recall', c='c')
+    ax[1].set_title('Accuracy / Precision / Recall')
     ax[1].set_xlabel('Epochs')
     ax[1].legend()
 
