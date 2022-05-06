@@ -104,13 +104,12 @@ def preprocess_images(ds,
         image = tf.clip_by_value(image, 0, 1)
         return image, label
 
-
     # Create a wrapper function for updating seeds.
     def augment_data(x, y):
         seed = rng.make_seeds(2)[0]
         image, label = augment((x, y), seed)
         return image, label
-    
+
     def keras_augment_data(x, y):
         keras_augment = tf.keras.Sequential([
             tf.keras.layers.RandomRotation(0.2),
@@ -149,10 +148,10 @@ def plot_loss_curves(history):
 
     accuracy = history.history['accuracy']
     val_accuracy = history.history['val_accuracy']
-    precision = history.history['precision']
-    val_precision = history.history['val_precision']
-    recall = history.history['recall']
-    val_recall = history.history['val_recall']
+    precision = history.history['precision_1']
+    val_precision = history.history['val_precision_1']
+    recall = history.history['recall_1']
+    val_recall = history.history['val_recall_1']
 
     epochs = range(len(history.history['loss']))
 
@@ -310,21 +309,22 @@ def make_val_predictions(model,
         ax.set_yticks([])
 
 
-def plot_confusion_matrixes(cm, class_names):
+def plot_confusion_matrixes(cm, class_names, model_name=None, cmap='RdYlGn'):
     """
     Plot confusion matrixes:
     - The first one with absolute values
     - The second one with percentages
     """
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+    if model_name:
+        fig.suptitle(model_name, fontsize=22)
 
     sns.heatmap(data=cm,
                 ax=ax[0],
-                cmap='RdYlGn',
+                cmap=cmap,
                 annot=True,
                 fmt='.0f',
                 annot_kws={'size': 16})
-    ax[0].set_title('Confusion Matrix', fontsize=22)
     ax[0].set_xlabel('True Label', fontsize=16)
     ax[0].set_ylabel('Predicted Label', fontsize=16)
     ax[0].set_xticks(ticks=np.arange(.5, len(class_names) + .5))
@@ -334,11 +334,10 @@ def plot_confusion_matrixes(cm, class_names):
 
     sns.heatmap(data=cm / np.sum(cm, axis=0, keepdims=True),
                 ax=ax[1],
-                cmap='RdYlGn',
+                cmap=cmap,
                 annot=True,
                 fmt='.1%',
                 annot_kws={'size': 16})
-    ax[1].set_title('Confusion Matrix', fontsize=22)
     ax[1].set_xlabel('True Label', fontsize=16)
     ax[1].set_ylabel('Predicted Label', fontsize=16)
     ax[1].set_xticks(ticks=np.arange(.5, len(class_names) + .5))
