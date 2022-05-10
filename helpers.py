@@ -143,37 +143,42 @@ def plot_loss_curves(history):
     """
     Returns separate loss curves for training and validation metrics.
     """
-    loss = history.history['loss']
-    val_loss = history.history['val_loss']
-
-    accuracy = history.history['accuracy']
-    val_accuracy = history.history['val_accuracy']
-    precision = history.history['precision_1']
-    val_precision = history.history['val_precision_1']
-    recall = history.history['recall_1']
-    val_recall = history.history['val_recall_1']
 
     epochs = range(len(history.history['loss']))
 
-    fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+    fig, ax = plt.subplots(1, 4, figsize=(30, 5))
 
-    # Plot loss
+    accuracy = history.history['accuracy']
+    val_accuracy = history.history['val_accuracy']
+    ax[1].plot(epochs, accuracy, label='training_accuracy', c='g')
+    ax[1].plot(epochs, val_accuracy, label='val_accuracy', c='lightgreen')
+    ax[1].set_title('Accuracy')
+    ax[1].set_xlabel('Epochs')
+    ax[1].legend()
+
+    precision = history.history['precision']
+    val_precision = history.history['val_precision']
+    ax[2].plot(epochs, precision, label='training_precision', c='darkblue')
+    ax[2].plot(epochs, val_precision, label='val_precision', c='royalblue')
+    ax[2].set_title('Precision')
+    ax[2].set_xlabel('Epochs')
+    ax[2].legend()
+
+    recall = history.history['recall']
+    val_recall = history.history['val_recall']
+    ax[3].plot(epochs, recall, label='training_recall', c='darkcyan')
+    ax[3].plot(epochs, val_recall, label='val_recall', c='c')
+    ax[3].set_title('Recall')
+    ax[3].set_xlabel('Epochs')
+    ax[3].legend()
+
+    loss = history.history['loss']
+    val_loss = history.history['val_loss']
     ax[0].plot(epochs, loss, label='training_loss', c='r')
     ax[0].plot(epochs, val_loss, label='val_loss', c='orange')
     ax[0].set_title('Loss')
     ax[0].set_xlabel('Epochs')
     ax[0].legend()
-
-    # Plot accuracy
-    ax[1].plot(epochs, accuracy, label='training_accuracy', c='g')
-    ax[1].plot(epochs, val_accuracy, label='val_accuracy', c='lightgreen')
-    ax[1].plot(epochs, precision, label='training_precision', c='b')
-    ax[1].plot(epochs, val_precision, label='val_precision', c='lightblue')
-    ax[1].plot(epochs, recall, label='training_recall', c='darkcyan')
-    ax[1].plot(epochs, val_recall, label='val_recall', c='c')
-    ax[1].set_title('Accuracy / Precision / Recall')
-    ax[1].set_xlabel('Epochs')
-    ax[1].legend()
 
 
 def calculate_metrics(y_true, y_pred, multi=False):
