@@ -1,7 +1,9 @@
+from argparse import ArgumentError
 import os
 import random
 
 import numpy as np
+import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -349,6 +351,90 @@ def plot_confusion_matrixes(cm, class_names, model_name=None, cmap='RdYlGn'):
     ax[1].set_xticklabels(labels=class_names, fontsize=12)
     ax[1].set_yticks(ticks=np.arange(.5, len(class_names) + .5))
     ax[1].set_yticklabels(labels=class_names, fontsize=12)
+
+
+def compare_models(models, test_data, type='binary'):
+    if type == 'binary':
+        evaluation_scores = [
+            evaluate_model_binary(model, test_data) for model in models
+        ]
+    elif type == 'multi':
+        evaluation_scores = [
+            evaluate_model_multi(model, test_data) for model in models
+        ]
+
+    metrics = [score[2] for score in evaluation_scores]
+
+    df = pd.DataFrame(metrics)
+    df['model'] = [m.name for m in models]
+    df.set_index('model', inplace=True)
+
+    return evaluation_scores, df.applymap('{:.2%}'.format)
+
+
+def train_new_densenet201_model(train_data,
+                                val_data,
+                                type='binary',
+                                seed=2,
+                                name=None,
+                                fine_tune_model=False,
+                                img_size=(224, 224),
+                                epochs=20,
+                                class_weight=None,
+                                verbose=False):
+    """
+    Creates a new densenet201 model with given parameters and train it.
+    Returns the trained model and the training history
+    """
+    tf.random.set_seed(seed)
+
+    # Model creation
+    base_model = tf.keras.applications.DenseNet201(include_top=False)
+    if not fine_tune_model:
+        base_model.trainable = False
+        learning_rate = 1e-3
+    else:
+        base_model.trainable = True
+        learning_rate = 1e-4
+        # Unfreeze the 20 last layers
+        for layer in base_model.layers[:-20]:
+            layer.trainable = False
+
+    inputs = tf.keras.layers.Input(shape=(*img_size, 3), name="input_layer")
+    x = base_model(inputs)
+    x = tf.keras.layers.GlobalAveragePooling2D(
+        name="global_average_pooling_layer")(x)
+
+    if type == 'binary':
+        loss = 'binary_crossentropy'
+        output_units = 1
+        activation = 'sigmoid'
+    elif type == 'categorical':
+        loss = 'categorical_crossentropy'
+        output_units = 3
+        activation = 'softmax'
+    else:
+        raise ArgumentError(f'Invalid type {type}')
+
+    outputs = tf.keras.layers.Dense(units=output_units,
+                                    activation=activation,
+                                    name="output_layer")(x)
+    model = tf.keras.Model(inputs=inputs, outputs=outputs, name=name)
+
+    # Model compilation
+    model.compile(
+        loss=loss,
+        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+        metrics=['accuracy', 'Precision', 'Recall'])
+
+    # Model training
+    history = model.fit(train_data,
+                        epochs=epochs,
+                        validation_data=val_data,
+                        class_weight=class_weight,
+                        verbose=verbose)
+
+    return model, history
 
 
 def create_tensorboard_callback(dir_name, experiment_name):
